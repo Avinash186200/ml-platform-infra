@@ -1,0 +1,30 @@
+# Dev runs one replica of each API; the HPA can still add more under load.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: feature-api
+spec:
+  minReplicas: 1
+  maxReplicas: 3
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: model-api
+spec:
+  minReplicas: 1
+  maxReplicas: 2
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: feature-api
+spec:
+  replicas: 1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-api
+spec:
+  replicas: 1

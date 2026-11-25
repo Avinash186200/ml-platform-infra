@@ -1,0 +1,29 @@
+# Dev overlay. The placeholders below (account 111111111111, bucket and Redis
+# names) are filled from `terraform output` before a deploy; see docs/runbook.md.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+labels:
+  - pairs:
+      environment: dev
+    includeSelectors: false
+
+images:
+  - name: mlplatform
+    newName: 111111111111.dkr.ecr.us-east-1.amazonaws.com/mlplat/platform
+    newTag: "1.0.0"
+
+configMapGenerator:
+  - name: platform-config
+    behavior: merge
+    literals:
+      - MLPI_ARTIFACTS_URL=s3://mlplat-dev-artifacts-111111111111
+      - MLPI_REDIS_URL=rediss://mlplat-dev-redis.example.cache.amazonaws.com:6379/0
+      - MLPI_REFRESH_SECONDS=15
+
+patches:
+  - path: serviceaccount-roles.yaml
+  - path: scale-down.yaml

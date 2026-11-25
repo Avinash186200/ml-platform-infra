@@ -1,0 +1,5 @@
+# Copy to terraform.tfvars (git-ignored) and edit.
+region                  = "us-east-1"
+api_allowed_cidrs       = ["203.0.113.10/32"] # your office or VPN egress; a documentation range is shown
+cluster_admin_role_arns = ["arn:aws:iam::111111111111:role/platform-admin"]
+redis_replicas          = 0

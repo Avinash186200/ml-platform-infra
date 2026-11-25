@@ -1,0 +1,87 @@
+# Async job worker (POST /jobs on the feature API enqueues; this runs them).
+# No HTTP port. Liveness: the worker loop (and, during a long job, the
+# heartbeat thread) touches a file; the probe fails if it is older than 5
+# minutes, so a hung process is restarted. Its jobs return to the queue when
+# the lease runs out.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jobs-worker
+  labels:
+    app.kubernetes.io/name: jobs-worker
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: jobs-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: jobs-worker
+        app.kubernetes.io/part-of: ml-platform
+    spec:
+      serviceAccountName: jobs-worker
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: worker
+          image: mlplatform
+          imagePullPolicy: IfNotPresent
+          command: ["mlplatform", "worker"]
+          envFrom:
+            - configMapRef:
+                name: platform-config
+          env:
+            # A mounted file, not an env var: the value stays out of the process environment (child processes, crash reports).
+            - name: MLPI_REDIS_PASSWORD_FILE
+              value: /var/run/secrets/mlpi/redis/password
+            - name: MLPI_WORKER_ALIVE_FILE
+              value: /tmp/mlpi-worker-alive
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            exec:
+              command: ["mlplatform", "worker-alive", "--file", "/tmp/mlpi-worker-alive", "--max-age", "300"]
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: snapshots
+              mountPath: /var/cache/mlpi
+            - name: tmp
+              mountPath: /tmp
+            - name: redis-auth
+              mountPath: /var/run/secrets/mlpi/redis
+              readOnly: true
+      volumes:
+        - name: redis-auth
+          secret:
+            secretName: redis-auth
+            defaultMode: 0440
+            items:
+              - key: password
+                path: password
+        - name: snapshots
+          emptyDir:
+            sizeLimit: 2Gi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi

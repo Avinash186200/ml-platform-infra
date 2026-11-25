@@ -1,0 +1,15 @@
+# Non-secret settings. The Redis password is NOT here: pods read it from the
+# Secret "redis-auth" (key "password"), which the deploy step creates from
+# Secrets Manager (docs/runbook.md). No secret value is committed anywhere.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: platform-config
+data:
+  MLPI_ARTIFACTS_URL: "s3://REPLACE-artifact-bucket"
+  MLPI_REDIS_URL: "rediss://REPLACE-redis-endpoint:6379/0"
+  MLPI_SNAPSHOT_DIR: "/var/cache/mlpi/snapshots"
+  MLPI_CACHE_TTL_SECONDS: "86400"
+  MLPI_REFRESH_SECONDS: "30"
+  MLPI_FEATURE_API_URL: "http://feature-api"
+  NIGHTLY_EXPORT_ENTITIES: "SYN000,SYN001,SYN002,SYN003,SYN004"

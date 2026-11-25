@@ -1,0 +1,13 @@
+# Dagster instance config for docker-compose (DAGSTER_HOME). The nightly
+# feature job writes, checks and publishes a snapshot; two of those runs at
+# once could interleave, so runs tagged mlpi/serial=nightly-features are
+# queued one at a time. (publish_feature_snapshot also refuses to publish
+# anything its check did not verify, so this is the second line of defence.)
+run_coordinator:
+  module: dagster.core.run_coordinator
+  class: QueuedRunCoordinator
+  config:
+    tag_concurrency_limits:
+      - key: "mlpi/serial"
+        value: "nightly-features"
+        limit: 1

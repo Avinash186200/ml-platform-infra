@@ -1,0 +1,26 @@
+{
+  "cache_errors": 0,
+  "historical_query_pool": 300,
+  "late_corrections_in_v2": 60,
+  "requests": 3000,
+  "share_latest_queries": 0.6,
+  "snapshot_switch_at_request": 1500,
+  "versioned_key": {
+    "after": {
+      "hit_rate": 0.806,
+      "hits": 1209,
+      "naive_stale": 215,
+      "requests": 1500,
+      "stale": 0,
+      "store_queries": 291
+    },
+    "before": {
+      "hit_rate": 0.7986666666666666,
+      "hits": 1198,
+      "naive_stale": 0,
+      "requests": 1500,
+      "stale": 0,
+      "store_queries": 302
+    }
+  }
+}

@@ -1,0 +1,142 @@
+{
+  "config": {
+    "market": {
+      "end": "2024-12-31",
+      "n_entities": 40,
+      "seed": 7,
+      "start": "2021-01-01"
+    },
+    "training": {
+      "test_start": "2024-01-01"
+    }
+  },
+  "control": {
+    "checks": {
+      "evaluation_not_too_good": true,
+      "feature_snapshot_point_in_time": true,
+      "raw_fundamentals_valid": true,
+      "raw_prices_valid": true,
+      "training_set_no_leakage": true
+    },
+    "gate": {
+      "checks": {
+        "auc_ci95_low_above_0.5": false,
+        "beats_constant_prior_log_loss": false,
+        "enough_test_rows": true
+      },
+      "passed": false
+    },
+    "materialized": [
+      "candidate_model",
+      "feature_snapshot",
+      "model_evaluation",
+      "publish_feature_snapshot",
+      "raw_fundamentals",
+      "raw_prices",
+      "training_set"
+    ],
+    "metrics": {
+      "accuracy": 0.5058365758754864,
+      "auc": 0.5030485700010598,
+      "auc_ci95_high": 0.5170004097336827,
+      "auc_ci95_low": 0.4875619596814486,
+      "baseline_log_loss": 0.6931471805599452,
+      "bootstrap_block_days": 10,
+      "brier": 0.25010479843610306,
+      "coef": {
+        "fundamental_score": 0.01885387399963055,
+        "ret_20d": 0.04192389676984631,
+        "ret_5d": -0.023773291516226553,
+        "vol_20d": 0.03006599011546783,
+        "volume_z_20d": 0.015201844562436959
+      },
+      "log_loss": 0.6933569787885501,
+      "n_test": 10280,
+      "n_train": 30240,
+      "test_days": 257,
+      "test_up_rate": 0.5
+    },
+    "mode": "control",
+    "models_current_set": false,
+    "promoted": false,
+    "raw_fundamental_rows": 890,
+    "raw_price_rows": 41720,
+    "restatements": 210,
+    "run_success": true,
+    "sensor_run_requests": 0,
+    "snapshot_version": 1,
+    "training": {
+      "n_dropped_purge_or_embargo": 200,
+      "n_test": 10280,
+      "n_train": 30240,
+      "test_first_decision": "2024-01-01 22:00:00",
+      "test_start": "2024-01-01",
+      "train_last_label_end": "2023-12-29 21:00:00"
+    }
+  },
+  "signal": {
+    "checks": {
+      "evaluation_not_too_good": true,
+      "feature_snapshot_point_in_time": true,
+      "raw_fundamentals_valid": true,
+      "raw_prices_valid": true,
+      "training_set_no_leakage": true
+    },
+    "gate": {
+      "checks": {
+        "auc_ci95_low_above_0.5": true,
+        "beats_constant_prior_log_loss": true,
+        "enough_test_rows": true
+      },
+      "passed": true
+    },
+    "materialized": [
+      "candidate_model",
+      "feature_snapshot",
+      "model_artifact",
+      "model_evaluation",
+      "publish_feature_snapshot",
+      "raw_fundamentals",
+      "raw_prices",
+      "training_set"
+    ],
+    "metrics": {
+      "accuracy": 0.5708171206225681,
+      "auc": 0.5975061318112311,
+      "auc_ci95_high": 0.6158666368907932,
+      "auc_ci95_low": 0.5762682402458781,
+      "baseline_log_loss": 0.6931471805599452,
+      "bootstrap_block_days": 10,
+      "brier": 0.24298887640604722,
+      "coef": {
+        "fundamental_score": 0.20220669691105742,
+        "ret_20d": 0.15597831941335544,
+        "ret_5d": -0.018148683641758985,
+        "vol_20d": 0.026122635890848296,
+        "volume_z_20d": -0.0003257027251361384
+      },
+      "log_loss": 0.6789426000174736,
+      "n_test": 10280,
+      "n_train": 30240,
+      "test_days": 257,
+      "test_up_rate": 0.5
+    },
+    "mode": "signal",
+    "models_current_set": true,
+    "promoted": true,
+    "raw_fundamental_rows": 890,
+    "raw_price_rows": 41720,
+    "restatements": 210,
+    "run_success": true,
+    "sensor_run_requests": 1,
+    "snapshot_version": 1,
+    "training": {
+      "n_dropped_purge_or_embargo": 200,
+      "n_test": 10280,
+      "n_train": 30240,
+      "test_first_decision": "2024-01-01 22:00:00",
+      "test_start": "2024-01-01",
+      "train_last_label_end": "2023-12-29 21:00:00"
+    }
+  }
+}

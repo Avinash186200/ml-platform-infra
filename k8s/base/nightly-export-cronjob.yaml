@@ -1,0 +1,60 @@
+# Every weekday after the nightly feature build, submit a feature export job.
+# The job key is the date, so a retried or duplicated CronJob run submits the
+# same key and the export still runs once (idempotent submission).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nightly-export
+spec:
+  schedule: "30 3 * * 2-6"
+  timeZone: "Etc/UTC"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      activeDeadlineSeconds: 600
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: nightly-export
+            app.kubernetes.io/part-of: ml-platform
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: submit
+              image: mlplatform
+              imagePullPolicy: IfNotPresent
+              command: ["/bin/sh", "-c"]
+              args:
+                - >-
+                  mlplatform submit-export
+                  --api "$MLPI_FEATURE_API_URL"
+                  --entities "$NIGHTLY_EXPORT_ENTITIES"
+                  --as-of "$(date -u +%Y-%m-%dT00:00:00)"
+                  --job-key "nightly-export-$(date -u +%Y-%m-%d)"
+              envFrom:
+                - configMapRef:
+                    name: platform-config
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]

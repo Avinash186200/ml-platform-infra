@@ -1,0 +1,145 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  TERRAFORM_VERSION: "1.9.8"
+  TFLINT_VERSION: "v0.53.0"
+  KUBERNETES_VERSION: "1.31.0"
+  KUSTOMIZE_VERSION: "5.4.3"
+  KUBECONFORM_VERSION: "0.6.7"
+  CHECKOV_VERSION: "3.4.10"
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install -c constraints.txt -e ".[dev]"
+      - name: Run tests (includes the Dagster graph in-process and a full bench rerun checked against results/*.json)
+        run: pytest -q
+      - name: Demo runs end to end (asset graph, gate, promotion)
+        run: mlplatform demo --artifacts /tmp/demo-artifacts --entities 20
+
+  terraform:
+    # Static checks only. No cloud credentials exist in this workflow and
+    # nothing is ever planned or applied.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install terraform and tflint (checksums pinned)
+        working-directory: ${{ runner.temp }}
+        run: |
+          set -euo pipefail
+          curl -sSfLo terraform.zip "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+          echo "186e0145f5e5f2eb97cbd785bc78f21bae4ef15119349f6ad4fa535b83b10df8  terraform.zip" | sha256sum -c -
+          curl -sSfLo tflint.zip "https://github.com/terraform-linters/tflint/releases/download/${TFLINT_VERSION}/tflint_linux_amd64.zip"
+          echo "bb0a3a6043ea1bcd221fc95d49bac831bb511eb31946ca6a4050983e9e584578  tflint.zip" | sha256sum -c -
+          mkdir -p bin && unzip -q -o terraform.zip -d bin && unzip -q -o tflint.zip -d bin
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: terraform fmt
+        run: terraform fmt -check -recursive -diff
+      - name: terraform init (no backend) and validate
+        working-directory: infra/terraform/envs/dev
+        run: |
+          terraform init -backend=false -input=false -lockfile=readonly
+          terraform validate
+      - name: tflint
+        env:
+          # only to avoid API rate limits when downloading the aws ruleset (tflint verifies its signature)
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          tflint --init --config "$PWD/.tflint.hcl"
+          tflint --recursive --config "$PWD/.tflint.hcl" --format compact
+
+  kubernetes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install kustomize and kubeconform (checksums pinned)
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          curl -sSfLo kustomize.tgz "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz"
+          echo "3669470b454d865c8184d6bce78df05e977c9aea31c30df3c669317d43bcc7a7  kustomize.tgz" | sha256sum -c -
+          curl -sSfLo kubeconform.tgz "https://github.com/yannh/kubeconform/releases/download/v${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          echo "95f14e87aa28c09d5941f11bd024c1d02fdc0303ccaa23f61cef67bc92619d73  kubeconform.tgz" | sha256sum -c -
+          mkdir -p bin && tar -xzf kustomize.tgz -C bin && tar -xzf kubeconform.tgz -C bin
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Cache Kubernetes schemas
+        uses: actions/cache@v4
+        with:
+          path: .cache/k8s-schemas
+          key: k8s-schemas-${{ env.KUBERNETES_VERSION }}-${{ hashFiles('scripts/fetch-k8s-schemas.sh') }}
+      - name: Fetch schemas (skipped files already cached)
+        run: bash scripts/fetch-k8s-schemas.sh
+      - name: kustomize build + kubeconform (offline, strict, missing schema = error)
+        run: bash scripts/validate-k8s.sh
+      - name: Keep the rendered dev manifests for the checkov job
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendered-manifests
+          path: .cache/rendered/
+          retention-days: 3
+
+  checkov:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: kubernetes
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@v4
+        with:
+          name: rendered-manifests
+          path: .cache/rendered
+      - name: Install checkov
+        run: pip install "checkov==${CHECKOV_VERSION}"
+      - name: checkov on Terraform (skips are inline, each with a reason)
+        run: checkov -d infra/terraform --framework terraform --compact --quiet
+      - name: checkov on the rendered dev manifests (skips explained in docs/cost-and-security.md)
+        run: checkov -f .cache/rendered/k8s-overlays-dev.yaml --framework kubernetes --compact --quiet --skip-check CKV_K8S_43,CKV_K8S_15,CKV_K8S_9
+
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: docker compose file is valid
+        run: docker compose config -q
+      - name: Build the image
+        run: docker build -t mlplatform:ci .
+      - name: Image imports every entry point and runs as a non-root user
+        run: |
+          docker run --rm mlplatform:ci python -c "import mlplatform.service.app, mlplatform.orchestration.definitions, s3fs; print('ok')"
+          test "$(docker run --rm mlplatform:ci id -u)" = "10001"
+          docker run --rm mlplatform:ci mlplatform --help
+
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

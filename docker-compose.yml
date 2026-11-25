@@ -1,0 +1,79 @@
+# Optional local stack: Redis, the feature API, the model API, the job worker
+# and the Dagster UI, sharing one artifact directory. Not needed for tests or CI.
+#
+#   docker compose up --build
+#   curl "http://localhost:8000/features/SYN001?as_of=2024-06-03T22:00:00Z"
+#   curl "http://localhost:8001/predict/SYN001?as_of=2024-06-03T22:00:00Z"
+#   open http://localhost:3000   (Dagster UI)
+
+x-app: &app
+  build: .
+  image: mlplatform:1.0.0
+  environment:
+    MLPI_ARTIFACTS_URL: /data/artifacts
+    MLPI_SNAPSHOT_DIR: /data/snapshot-cache
+    MLPI_REDIS_URL: redis://redis:6379/0
+    MLPI_REFRESH_SECONDS: "5"
+  volumes:
+    - artifacts:/data
+  depends_on:
+    redis:
+      condition: service_healthy
+
+services:
+  redis:
+    image: redis:7.2-alpine
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "volatile-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+    # No host port: only the other services on this network can reach it.
+
+  # Runs the asset graph once (synthetic data -> snapshot -> model) and promotes the model.
+  bootstrap:
+    <<: *app
+    command: ["mlplatform", "demo", "--artifacts", "/data/artifacts", "--entities", "20"]
+    restart: "no"
+
+  feature-api:
+    <<: *app
+    ports: ["127.0.0.1:8000:8000"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      bootstrap:
+        condition: service_completed_successfully
+
+  model-api:
+    <<: *app
+    command: ["uvicorn", "--factory", "mlplatform.service.app:model_app_from_env", "--host", "0.0.0.0", "--port", "8001"]
+    environment:
+      MLPI_ARTIFACTS_URL: /data/artifacts
+      MLPI_FEATURE_API_URL: http://feature-api:8000
+      MLPI_REFRESH_SECONDS: "5"
+    ports: ["127.0.0.1:8001:8001"]
+    depends_on:
+      feature-api:
+        condition: service_started
+
+  worker:
+    <<: *app
+    command: ["mlplatform", "worker", "--worker-id", "compose-worker-1"]
+    depends_on:
+      feature-api:
+        condition: service_started
+
+  dagster:
+    <<: *app
+    command: ["dagster", "dev", "-m", "mlplatform.orchestration.definitions", "-h", "0.0.0.0", "-p", "3000"]
+    environment:
+      MLPI_ARTIFACTS_URL: /data/artifacts
+      DAGSTER_HOME: /data/dagster-home
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+
+volumes:
+  artifacts:

@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ml-platform
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: ml-platform
+    includeSelectors: false
+
+resources:
+  - namespace.yaml
+  - serviceaccounts.yaml
+  - configmap.yaml
+  - feature-api.yaml
+  - model-api.yaml
+  - jobs-worker.yaml
+  - nightly-export-cronjob.yaml
+  - networkpolicy.yaml
+
+images:
+  - name: mlplatform
+    newTag: "1.0.0"

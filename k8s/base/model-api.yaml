@@ -1,0 +1,135 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-api
+  labels:
+    app.kubernetes.io/name: model-api
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: model-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: model-api
+        app.kubernetes.io/part-of: ml-platform
+    spec:
+      serviceAccountName: model-api
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: model-api
+          image: mlplatform
+          imagePullPolicy: IfNotPresent
+          command: ["uvicorn", "--factory", "mlplatform.service.app:model_app_from_env"]
+          args: ["--host", "0.0.0.0", "--port", "8001", "--workers", "1"]
+          ports:
+            - name: http
+              containerPort: 8001
+          # Features come from the feature API over HTTP (MLPI_FEATURE_API_URL),
+          # so this pod needs neither Redis nor the feature snapshots.
+          env:
+            - name: MLPI_ARTIFACTS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: platform-config
+                  key: MLPI_ARTIFACTS_URL
+            - name: MLPI_FEATURE_API_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: platform-config
+                  key: MLPI_FEATURE_API_URL
+            - name: MLPI_REFRESH_SECONDS
+              valueFrom:
+                configMapKeyRef:
+                  name: platform-config
+                  key: MLPI_REFRESH_SECONDS
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 2
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-api
+  labels:
+    app.kubernetes.io/name: model-api
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: model-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: model-api
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: model-api
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: model-api
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: model-api

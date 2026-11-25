@@ -1,0 +1,10 @@
+{
+  "of_which_returned_the_original_report": 49,
+  "queries": 300,
+  "queries_at_publication_edges": 150,
+  "queries_inside_a_restatement_window": 49,
+  "records_in_snapshot": 205490,
+  "responses_with_available_at_after_as_of": 0,
+  "sql_vs_reference_mismatches": 0,
+  "vectorised_join_vs_reference_mismatches": 0
+}
