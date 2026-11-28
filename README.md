@@ -7,6 +7,10 @@
 
 A small, reproducible ML platform: Terraform for AWS, Kubernetes manifests, a Dagster asset graph with data-quality and leakage checks and a promotion gate, and a feature API that answers "what did we know about this entity at time T" without ever returning a value published after T.
 
+## Watch
+
+- Video walkthrough: [Data Pipelines for AI: Point-in-Time Data, Look-Ahead Bias](https://youtu.be/RcC7qz3XHdY)
+
 ## Scenario
 
 A small data science team at an asset manager runs a nightly feature build and a weekly model retrain by hand on one VM. Nobody can say which data a model was trained on, a restated fundamental silently changes yesterday's features, and analysts query the feature tables with ad-hoc SQL that happily joins on the quarter instead of the publication date. They want infrastructure as code, orchestrated pipelines with checks that stop bad data, and one feature service that the models and the analysts both query point in time.
